@@ -46,6 +46,93 @@ function StatCard({ label, value, type = 'primary', icon }) {
   );
 }
 
+function LivePanel({ toast }) {
+  const [live, setLive]       = useState(null);
+  const [videos, setVideos]   = useState([]);
+  const [videoId, setVideoId] = useState('');
+  const [titulo, setTitulo]   = useState('');
+  const [saving, setSaving]   = useState(false);
+
+  function loadStatus() {
+    api.liveStatus().then(setLive).catch(() => {});
+  }
+
+  useEffect(() => {
+    loadStatus();
+    api.videos('ativo', '').then(vs => { setVideos(vs); if (vs.length) setVideoId(vs[0].id); }).catch(() => {});
+    const t = setInterval(loadStatus, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  async function start() {
+    const video = videos.find(v => v.id === videoId);
+    if (!video) return toast('Seleccione um vídeo.', 'error');
+    setSaving(true);
+    try {
+      // O caminho no servidor — backend resolverá a partir do id
+      const sourcePath = `uploads/videos/${video.id}_compressed.mp4`;
+      await api.liveStart(sourcePath, titulo || video.titulo);
+      toast('Transmissão iniciada!');
+      loadStatus();
+    } catch (e) { toast(e.message, 'error'); }
+    finally { setSaving(false); }
+  }
+
+  async function stop() {
+    setSaving(true);
+    try {
+      await api.liveStop();
+      toast('Transmissão encerrada.');
+      loadStatus();
+    } catch (e) { toast(e.message, 'error'); }
+    finally { setSaving(false); }
+  }
+
+  const aoVivo = live?.ao_vivo;
+
+  return (
+    <div className="section-card" style={{ marginBottom: 20, borderTop: `3px solid ${aoVivo ? '#ef4444' : 'var(--border)'}` }}>
+      <div className="section-card-header">
+        <h3>
+          {aoVivo
+            ? <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
+                AO VIVO — {live.titulo}
+              </span>
+            : '📡 Transmissão ao Vivo'}
+        </h3>
+      </div>
+      {aoVivo ? (
+        <div style={{ padding: '12px 16px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, color: 'var(--text2)' }}>A transmitir desde {new Date(live.iniciadoEm).toLocaleTimeString('pt-PT')}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>URL: /hls/live/index.m3u8</div>
+          </div>
+          <button className="btn btn-danger" disabled={saving} onClick={stop}>
+            {saving ? '⏳' : '⏹ Parar'}
+          </button>
+        </div>
+      ) : (
+        <div style={{ padding: '12px 16px 16px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="field" style={{ flex: 2, minWidth: 160, marginBottom: 0 }}>
+            <label>Vídeo fonte</label>
+            <select value={videoId} onChange={e => setVideoId(e.target.value)}>
+              {videos.map(v => <option key={v.id} value={v.id}>{v.titulo}</option>)}
+            </select>
+          </div>
+          <div className="field" style={{ flex: 2, minWidth: 160, marginBottom: 0 }}>
+            <label>Título da transmissão</label>
+            <input type="text" placeholder="Opcional" value={titulo} onChange={e => setTitulo(e.target.value)} />
+          </div>
+          <button className="btn btn-danger" disabled={saving || !videos.length} onClick={start}>
+            {saving ? '⏳' : '🔴 Iniciar Live'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard({ toast, onNavigate }) {
   const [stats, setStats]       = useState(null);
   const [audit, setAudit]       = useState([]);
@@ -79,6 +166,7 @@ export default function Dashboard({ toast, onNavigate }) {
 
   return (
     <>
+      <LivePanel toast={toast} />
       <div className="stats-grid">
         <StatCard label="Total de Utilizadores"   value={stats.totalUtilizadores}     type="primary" icon="👥" />
         <StatCard label="Utilizadores Suspensos"  value={stats.utilizadoresSuspensos}  type="warn"    icon="⚠️" />

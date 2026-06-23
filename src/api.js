@@ -49,4 +49,8 @@ export const api = {
   criarCategoria: (nome, icone) => req('POST', '/admin/categorias', { nome, icone }),
 
   auditoria: () => req('GET', '/admin/auditoria'),
+
+  liveStatus: () => req('GET', '/live/status'),
+  liveStart:  (sourcePath, titulo) => req('POST', '/live/start', { sourcePath, titulo }),
+  liveStop:   () => req('POST', '/live/stop'),
 };
